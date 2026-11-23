@@ -1,0 +1,329 @@
+﻿<Window x:Class="VeilDesktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Veil"
+        Width="1120" Height="710" MinWidth="880" MinHeight="560"
+        WindowStartupLocation="CenterScreen"
+        Background="#F0F0F0"
+        FontFamily="Segoe UI" FontSize="12"
+        AllowDrop="True"
+        Drop="Window_Drop"
+        DragOver="Window_DragOver">
+    <Window.Resources>
+        <Style TargetType="Button" x:Key="ToolBtn">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#E5F1FB"/>
+                    <Setter Property="BorderBrush" Value="#0078D7"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style TargetType="DataGrid">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#CCCCCC"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+            <Setter Property="HorizontalGridLinesBrush" Value="#EEEEEE"/>
+            <Setter Property="RowBackground" Value="White"/>
+            <Setter Property="AlternatingRowBackground" Value="#F9FAFB"/>
+            <Setter Property="HeadersVisibility" Value="Column"/>
+            <Setter Property="AutoGenerateColumns" Value="False"/>
+            <Setter Property="IsReadOnly" Value="True"/>
+            <Setter Property="SelectionMode" Value="Single"/>
+            <Setter Property="CanUserResizeRows" Value="False"/>
+            <Setter Property="RowHeight" Value="26"/>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel>
+
+        <Menu DockPanel.Dock="Top" Background="#F9F9F9" BorderBrush="#D6D6D6" BorderThickness="0,0,0,1" Padding="4,2">
+            <MenuItem Header="_File">
+                <MenuItem Header="_New Key Pair (Private + Public)…" Click="NewKeyPair_Click"/>
+                <Separator/>
+                <MenuItem Header="_Sign / Encrypt &amp; Export .veil…" Click="GoToEncrypt_Click"/>
+                <MenuItem Header="_Decrypt / Verify .veil File…" Click="DecryptFile_Click"/>
+                <Separator/>
+                <MenuItem Header="_Import Contact Public Key…" Click="ImportPublicKey_Click"/>
+                <MenuItem Header="Import _Private Key Backup (.veilkey)…" Click="ImportPrivateKey_Click"/>
+                <Separator/>
+                <MenuItem Header="E_xit" Click="Exit_Click"/>
+            </MenuItem>
+            <MenuItem Header="_Certificates">
+                <MenuItem Header="_Export Selected Public Key (.veilpub)…" Click="ExportSelectedPublicKey_Click"/>
+                <MenuItem Header="_Copy Selected Public Key (veilpub1:)" Click="CopySelectedPublicKey_Click"/>
+                <Separator/>
+                <MenuItem Header="_Backup Selected Private Key (.veilkey)…" Click="BackupSelectedPrivateKey_Click"/>
+                <MenuItem Header="Toggle _Verified Trust" Click="ToggleVerify_Click"/>
+                <Separator/>
+                <MenuItem Header="_Delete Selected Key" Click="DeleteSelectedKey_Click"/>
+            </MenuItem>
+            <MenuItem Header="_Tools">
+                <MenuItem Header="_Inspect .veil Packet…" Click="InspectFile_Click"/>
+                <Separator/>
+                <MenuItem Header="_Lock Vault" Click="LockVault_Click"/>
+            </MenuItem>
+            <MenuItem Header="_Help">
+                <MenuItem Header="_About Veil" Click="About_Click"/>
+            </MenuItem>
+        </Menu>
+
+        <Border DockPanel.Dock="Top" Background="#F5F5F5" BorderBrush="#D6D6D6" BorderThickness="0,0,0,1" Padding="6,4">
+            <DockPanel LastChildFill="False">
+                <WrapPanel DockPanel.Dock="Left" VerticalAlignment="Center">
+                    <Button Style="{StaticResource ToolBtn}" Click="GoToEncrypt_Click" ToolTip="Sign, encrypt, and export a .veil file">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🔒" Margin="0,0,6,0"/>
+                            <TextBlock Text="Sign / Encrypt…"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource ToolBtn}" Click="DecryptFile_Click" ToolTip="Open, decrypt, and verify a .veil file using the active key set">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🔓" Margin="0,0,6,0"/>
+                            <TextBlock Text="Decrypt / Verify…"/>
+                        </StackPanel>
+                    </Button>
+                    <Rectangle Width="1" Height="20" Fill="#CCCCCC" Margin="6,0"/>
+                    <Button Style="{StaticResource ToolBtn}" Click="NewKeyPair_Click" ToolTip="Generate a new Private + Public Key Set">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🗝" Margin="0,0,6,0"/>
+                            <TextBlock Text="New Key Set…"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource ToolBtn}" Click="ImportPublicKey_Click" ToolTip="Add a contact using their Veil Public Key">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📥" Margin="0,0,6,0"/>
+                            <TextBlock Text="Import Public Key…"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource ToolBtn}" Click="ExportSelectedPublicKey_Click" ToolTip="Export selected Public Key (.veilpub) to share with contacts">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📤" Margin="0,0,6,0"/>
+                            <TextBlock Text="Export Public Key…"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource ToolBtn}" Click="BackupSelectedPrivateKey_Click" ToolTip="Export encrypted backup of your Private Key (.veilkey)">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🛡" Margin="0,0,6,0"/>
+                            <TextBlock Text="Backup Private Key…"/>
+                        </StackPanel>
+                    </Button>
+                    <Rectangle Width="1" Height="20" Fill="#CCCCCC" Margin="6,0"/>
+                    <Button Style="{StaticResource ToolBtn}" Click="InspectFile_Click" ToolTip="Inspect wire-level binary structure of any .veil packet">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🔎" Margin="0,0,6,0"/>
+                            <TextBlock Text="Inspect Packet…"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource ToolBtn}" Click="LockVault_Click" ToolTip="Lock private key vault">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🔐" Margin="0,0,6,0"/>
+                            <TextBlock Text="Lock"/>
+                        </StackPanel>
+                    </Button>
+                </WrapPanel>
+            </DockPanel>
+        </Border>
+
+        <Border DockPanel.Dock="Top" Background="#EAEAEA" BorderBrush="#D0D0D0" BorderThickness="0,0,0,1" Padding="10,6">
+            <DockPanel>
+                <TextBlock Text="Active Key Set:" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <Button DockPanel.Dock="Right" Content="+ New Key Set" Padding="10,3" Margin="8,0,0,0" Click="NewKeyPair_Click"/>
+                <TextBlock DockPanel.Dock="Right" Text="Decrypting &amp; signing use ONLY this key set's private key"
+                           Foreground="#555555" FontSize="11" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                <ComboBox x:Name="ActiveKeyCombo" DisplayMemberPath="SwitcherLabel" MinWidth="320" MaxWidth="480"
+                          HorizontalAlignment="Left" Padding="6,3" FontFamily="Consolas" FontSize="11.5"
+                          SelectionChanged="ActiveKeyCombo_SelectionChanged"/>
+            </DockPanel>
+        </Border>
+
+        <StatusBar DockPanel.Dock="Bottom" Background="#F0F0F0" BorderBrush="#D6D6D6" BorderThickness="0,1,0,0">
+            <StatusBarItem>
+                <TextBlock x:Name="StatusText" Text="Vault locked"/>
+            </StatusBarItem>
+            <StatusBarItem HorizontalAlignment="Right">
+                <TextBlock Text="Veil · ML-KEM-768 + ML-DSA-65 + X25519 + Ed25519 + AES-256-GCM · Auto-Lock 5m" Foreground="#555555" Margin="0,0,6,0"/>
+            </StatusBarItem>
+        </StatusBar>
+
+        <TabControl x:Name="MainTabs" Margin="8" Background="White" BorderBrush="#CCCCCC">
+
+            <TabItem Header="  Keyring (My Keys &amp; Contacts)  ">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                        <ComboBox x:Name="FilterCombo" DockPanel.Dock="Right" Width="195" SelectedIndex="0" SelectionChanged="Filter_Changed" Padding="6,4">
+                            <ComboBoxItem Content="All Keys"/>
+                            <ComboBoxItem Content="My Private Keys"/>
+                            <ComboBoxItem Content="Contacts (Public Keys)"/>
+                            <ComboBoxItem Content="Verified Contacts"/>
+                        </ComboBox>
+                        <TextBox x:Name="SearchBox" Margin="0,0,8,0" Padding="6,4" BorderBrush="#ABADB3"
+                                 TextChanged="Filter_Changed" ToolTip="Filter by name, safety phrase, or key ID"/>
+                    </DockPanel>
+
+                    <DataGrid x:Name="KeysGrid" Grid.Row="1" SelectionChanged="KeysGrid_SelectionChanged" MouseDoubleClick="KeysGrid_DoubleClick">
+                        <DataGrid.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Switch to This Key Set (Active)" Click="CtxSwitchToKey_Click"/>
+                                <MenuItem Header="Sign / Encrypt .veil for this Key…" Click="CtxEncryptForKey_Click"/>
+                                <Separator/>
+                                <MenuItem Header="Copy Public Key (veilpub1:)" Click="CopySelectedPublicKey_Click"/>
+                                <MenuItem Header="Export Public Key (.veilpub)…" Click="ExportSelectedPublicKey_Click"/>
+                                <MenuItem Header="Backup Private Key (.veilkey)…" Click="BackupSelectedPrivateKey_Click"/>
+                                <Separator/>
+                                <MenuItem Header="Toggle Verified Trust" Click="ToggleVerify_Click"/>
+                                <MenuItem Header="Delete Key" Click="DeleteSelectedKey_Click"/>
+                            </ContextMenu>
+                        </DataGrid.ContextMenu>
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Name" Binding="{Binding DisplayName}" Width="180"/>
+                            <DataGridTextColumn Header="Key Type" Binding="{Binding KeyTypeLabel}" Width="165"/>
+                            <DataGridTextColumn Header="Safety Phrase" Binding="{Binding SafetyPhrase}" Width="200" FontFamily="Consolas"/>
+                            <DataGridTextColumn Header="Key ID" Binding="{Binding ShortId}" Width="140" FontFamily="Consolas"/>
+                            <DataGridTextColumn Header="Trust" Binding="{Binding TrustLabel}" Width="135"/>
+                            <DataGridTextColumn Header="Algorithm" Binding="{Binding Algorithm}" Width="245"/>
+                            <DataGridTextColumn Header="Created" Binding="{Binding AddedDate}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <Border Grid.Row="2" Background="#F7F7F7" BorderBrush="#D6D6D6" BorderThickness="1" Padding="10" Margin="0,8,0,0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock x:Name="DetailHeader" Text="Select a key to view details" FontWeight="SemiBold"/>
+                                <TextBlock x:Name="DetailFingerprint" FontFamily="Consolas" FontSize="11" Foreground="#444444" Margin="0,3,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button x:Name="BtnCopyPub" Content="Copy Public Key" Padding="10,5" Margin="8,0,0,0" Click="CopySelectedPublicKey_Click"/>
+                                <Button x:Name="BtnExportPub" Content="Export .veilpub…" Padding="10,5" Margin="6,0,0,0" Click="ExportSelectedPublicKey_Click"/>
+                                <Button x:Name="BtnBackupPriv" Content="Backup Private Key…" Padding="10,5" Margin="6,0,0,0" Click="BackupSelectedPrivateKey_Click"/>
+                                <Button x:Name="BtnEncryptFor" Content="Encrypt .veil…" Padding="10,5" Margin="6,0,0,0" Click="CtxEncryptForKey_Click"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="  Encrypt &amp; Decrypt (.veil)  ">
+                <Grid Margin="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <GroupBox Grid.Column="0" Header="Sign, Encrypt &amp; Export .veil File" Padding="12" BorderBrush="#CCCCCC">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                                <DockPanel Margin="0,0,0,8">
+                                    <TextBlock Text="Signing As (Active Key):" Width="155" VerticalAlignment="Center"/>
+                                    <TextBox x:Name="ActiveSignerBox" IsReadOnly="True" Background="#F5F5F5" BorderBrush="#CCCCCC" Padding="6,4" FontFamily="Consolas" FontSize="11.5"/>
+                                </DockPanel>
+                                <DockPanel>
+                                    <TextBlock Text="Encrypt For (Public Key):" Width="155" VerticalAlignment="Center"/>
+                                    <ComboBox x:Name="RecipientCombo" DisplayMemberPath="DisplayName" Padding="6,4"/>
+                                </DockPanel>
+                            </StackPanel>
+
+                            <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                                <DockPanel Margin="0,0,0,10">
+                                    <Button Content="Attach File…" Padding="10,5" Click="AttachFile_Click"/>
+                                    <TextBlock x:Name="AttachmentLabel" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="#444444" TextTrimming="CharacterEllipsis"/>
+                                    <Button x:Name="ClearAttachBtn" Content="Clear" Padding="6,3" Margin="6,0,0,0" Visibility="Collapsed" Click="ClearAttach_Click"/>
+                                </DockPanel>
+                                <DockPanel>
+                                    <TextBlock Text="Tip: You can also drag any file onto this window." Foreground="#666666" FontSize="11" VerticalAlignment="Center"/>
+                                    <Button DockPanel.Dock="Right" Content="Export .veil File…" Padding="16,6" FontWeight="SemiBold" Click="ExportVeil_Click"/>
+                                </DockPanel>
+                            </StackPanel>
+
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Top" Text="Message (optional if attaching a file):" Foreground="#444444" Margin="0,0,0,4"/>
+                                <TextBox x:Name="ComposeBox" AcceptsReturn="True" TextWrapping="Wrap"
+                                         VerticalScrollBarVisibility="Auto" Padding="8" BorderBrush="#ABADB3"/>
+                            </DockPanel>
+                        </DockPanel>
+                    </GroupBox>
+
+                    <GroupBox Grid.Column="2" Header="Decrypt &amp; Verify .veil File" Padding="12" BorderBrush="#CCCCCC">
+                        <DockPanel>
+                            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                                <Button Content="Open .veil File…" Padding="12,5" FontWeight="SemiBold" Click="DecryptFile_Click"/>
+                                <TextBlock Text="Or drag &amp; drop any .veil file anywhere on this window." VerticalAlignment="Center" Margin="10,0,0,0" Foreground="#555555" FontSize="11.5"/>
+                            </DockPanel>
+
+                            <Border DockPanel.Dock="Top" Background="#F7F7F7" BorderBrush="#D6D6D6" BorderThickness="1" Padding="10" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock x:Name="DecStatusHeader" Text="No .veil file opened yet" FontWeight="SemiBold"/>
+                                    <TextBlock x:Name="DecSenderLine" FontSize="11.5" Foreground="#333333" Margin="0,3,0,0"/>
+                                    <TextBlock x:Name="DecMetaLine" FontFamily="Consolas" FontSize="11" Foreground="#555555" Margin="0,3,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+
+                            <WrapPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                                <Button x:Name="BtnSaveDecAttachment" Content="Save Decrypted File…" Padding="10,5" Margin="0,0,8,0" Visibility="Collapsed" Click="SaveDecAttachment_Click"/>
+                                <Button x:Name="BtnAddSenderContact" Content="Add Sender Public Key to Contacts" Padding="10,5" Margin="0,0,8,0" Visibility="Collapsed" Click="AddSenderContact_Click"/>
+                                <Button x:Name="BtnInspectDecPacket" Content="Inspect Packet" Padding="10,5" Visibility="Collapsed" Click="InspectDecPacket_Click"/>
+                            </WrapPanel>
+
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Top" Text="Decrypted Message:" Foreground="#444444" Margin="0,0,0,4"/>
+                                <TextBox x:Name="DecMessageBox" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                         Background="White" BorderBrush="#D6D6D6" Padding="8"/>
+                            </DockPanel>
+                        </DockPanel>
+                    </GroupBox>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="  Packet Inspector  ">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                        <TextBlock x:Name="InspectSummaryText" Text="Open any .veil file to inspect its wire-level binary layout and confirm zero metadata leakage."
+                                   VerticalAlignment="Center" Foreground="#333333"/>
+                        <Button DockPanel.Dock="Right" Content="Open .veil File…" Padding="10,5" Click="InspectFile_Click"/>
+                    </DockPanel>
+
+                    <Border Grid.Row="1" Background="#F7F7F7" BorderBrush="#CCCCCC" BorderThickness="1" Padding="10" Margin="0,0,0,8">
+                        <StackPanel>
+                            <TextBlock x:Name="InspectWireMeta" FontFamily="Consolas" FontSize="11.5" TextWrapping="Wrap"
+                                       Text="Wire Privacy: No packet loaded."/>
+                            <TextBlock x:Name="InspectTranscriptText" FontFamily="Consolas" FontSize="11" Foreground="#555555" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <DataGrid x:Name="SegmentsGrid" Grid.Row="2">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Offset" Binding="{Binding Offset}" Width="75" FontFamily="Consolas"/>
+                            <DataGridTextColumn Header="Size (B)" Binding="{Binding Length}" Width="80" FontFamily="Consolas"/>
+                            <DataGridTextColumn Header="Field" Binding="{Binding Name}" Width="200"/>
+                            <DataGridTextColumn Header="Hex Preview" Binding="{Binding HexPreview}" Width="260" FontFamily="Consolas"/>
+                            <DataGridTextColumn Header="Cryptographic Role" Binding="{Binding Role}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>
