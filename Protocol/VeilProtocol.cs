@@ -76,6 +76,7 @@ public sealed class OpenedEnvelope
 {
     public bool Verified { get; set; }
     public bool PostQuantumSignatureVerified { get; set; }
+    public bool IsPassphraseMode { get; set; }
     public string SentAt { get; set; } = "";
     public string Message { get; set; } = "";
     public VeilAttachment? Attachment { get; set; }
@@ -113,6 +114,8 @@ public static class VeilProtocol
 
     private static readonly byte[] EnvelopeMagicV1 = { 0x56, 0x45, 0x49, 0x4C, 0x31, 0x01 };
     private static readonly byte[] EnvelopeMagicV2 = { 0x56, 0x45, 0x49, 0x4C, 0x32, 0x02 };
+    private static readonly byte[] EnvelopeMagicPassV2 = { 0x56, 0x45, 0x49, 0x4C, 0x50, 0x02 };
+    private const int PassHeaderLen = 6 + 1 + 16 + 12;
 
     private static readonly byte[] CardMagicV1 = Encoding.ASCII.GetBytes("VCARD1");
     private static readonly byte[] CardMagicV2 = Encoding.ASCII.GetBytes("VCARD2");
@@ -809,8 +812,147 @@ public static class VeilProtocol
         }
     }
 
+    public static bool IsPassphrasePacket(byte[] buf) =>
+        buf.Length >= PassHeaderLen + GcmTagLen && buf.AsSpan(0, 6).SequenceEqual(EnvelopeMagicPassV2);
+
+    public static SealedResult SealWithPassphrase(string passphrase, string message, VeilAttachment? attachment = null)
+    {
+        if (string.IsNullOrEmpty(passphrase))
+            throw new ArgumentException("Passphrase cannot be empty.");
+
+        byte[] salt = RandomNumberGenerator.GetBytes(16);
+        byte[] nonce = RandomNumberGenerator.GetBytes(12);
+        byte flags = (byte)(attachment != null ? 0x02 : 0x00);
+
+        byte[] header = new byte[PassHeaderLen];
+        Buffer.BlockCopy(EnvelopeMagicPassV2, 0, header, 0, 6);
+        header[6] = flags;
+        Buffer.BlockCopy(salt, 0, header, 7, 16);
+        Buffer.BlockCopy(nonce, 0, header, 23, 12);
+
+        byte[] key = DeriveArgon2idKey(passphrase, salt);
+        try
+        {
+            string sentAt = DateTime.UtcNow.ToString("O");
+            var inner = new InnerPayloadDto
+            {
+                v = ProtocolVersion,
+                sentAt = sentAt,
+                senderCard = "",
+                message = message ?? "",
+                attachment = attachment,
+            };
+
+            byte[] payloadBytes = JsonSerializer.SerializeToUtf8Bytes(inner);
+            byte[] paddedInner = PadPlaintext(payloadBytes);
+
+            byte[] ct = new byte[paddedInner.Length];
+            byte[] tag = new byte[GcmTagLen];
+            using (var gcm = new AesGcm(key, GcmTagLen))
+            {
+                gcm.Encrypt(nonce, paddedInner, ct, tag, header);
+            }
+            CryptographicOperations.ZeroMemory(paddedInner);
+
+            byte[] packet = new byte[PassHeaderLen + ct.Length + GcmTagLen];
+            Buffer.BlockCopy(header, 0, packet, 0, PassHeaderLen);
+            Buffer.BlockCopy(ct, 0, packet, PassHeaderLen, ct.Length);
+            Buffer.BlockCopy(tag, 0, packet, PassHeaderLen + ct.Length, GcmTagLen);
+
+            return new SealedResult
+            {
+                PacketBytes = packet,
+                TranscriptHashHex = Convert.ToHexString(SHA256.HashData(header)).ToLowerInvariant(),
+                PaddedInnerBytes = ct.Length,
+                SentAt = sentAt,
+            };
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(key);
+        }
+    }
+
+    public static OpenedEnvelope OpenWithPassphrase(string passphrase, byte[] packetBytes)
+    {
+        if (!IsPassphrasePacket(packetBytes))
+            throw new InvalidDataException("Not a passphrase-encrypted Veil file.");
+
+        byte[] header = packetBytes[..PassHeaderLen];
+        byte[] salt = packetBytes[7..23];
+        byte[] nonce = packetBytes[23..35];
+        byte[] ct = packetBytes[PassHeaderLen..^GcmTagLen];
+        byte[] tag = packetBytes[^GcmTagLen..];
+
+        byte[] key = DeriveArgon2idKey(passphrase, salt);
+        try
+        {
+            byte[] paddedInner = new byte[ct.Length];
+            try
+            {
+                using var gcm = new AesGcm(key, GcmTagLen);
+                gcm.Decrypt(nonce, ct, tag, paddedInner, header);
+            }
+            catch
+            {
+                throw new CryptographicException("Wrong passphrase or tampered .veil file.");
+            }
+
+            byte[] payloadBytes = UnpadPlaintext(paddedInner);
+            CryptographicOperations.ZeroMemory(paddedInner);
+
+            var inner = JsonSerializer.Deserialize<InnerPayloadDto>(payloadBytes)
+                ?? throw new InvalidDataException("Corrupt inner payload.");
+
+            return new OpenedEnvelope
+            {
+                Verified = true,
+                PostQuantumSignatureVerified = false,
+                IsPassphraseMode = true,
+                SentAt = inner.sentAt,
+                Message = inner.message,
+                Attachment = inner.attachment,
+                Sender = new VeilContactCard { DisplayName = "Passphrase-Encrypted (No Key Pair)" },
+                TranscriptHashHex = Convert.ToHexString(SHA256.HashData(header)).ToLowerInvariant(),
+                TotalPacketBytes = packetBytes.Length,
+                PaddedPlaintextBytes = ct.Length,
+            };
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(key);
+        }
+    }
+
     public static PacketInspection InspectPacket(byte[] buf)
     {
+        if (IsPassphrasePacket(buf))
+        {
+            byte[] pHeader = buf[..PassHeaderLen];
+            int pCtLen = buf.Length - PassHeaderLen - GcmTagLen;
+            return new PacketInspection
+            {
+                Protocol = "VEIL-2 Passphrase Mode (Argon2id + AES-256-GCM)",
+                TotalBytes = buf.Length,
+                TranscriptHashHex = Convert.ToHexString(SHA256.HashData(pHeader)).ToLowerInvariant(),
+                VisibleOnWire = new Dictionary<string, string>
+                {
+                    ["Mode"] = "Symmetric Passphrase (Argon2id 64 MiB + AES-256-GCM)",
+                    ["Timestamp & Filename"] = "HIDDEN (Encrypted inside inner envelope)",
+                    ["Exact Length"] = $"OBSCURED (Power-of-2 bucket: {pCtLen:N0} bytes)",
+                },
+                Segments = new List<PacketSegment>
+                {
+                    new() { Offset = 0, Length = 6, Name = "Magic & Version", HexPreview = Convert.ToHexString(buf[..6]).ToLowerInvariant(), Role = "Protocol identifier (VEILP2)" },
+                    new() { Offset = 6, Length = 1, Name = "Flags", HexPreview = buf[6].ToString("x2"), Role = "Envelope capability flags" },
+                    new() { Offset = 7, Length = 16, Name = "Argon2id Salt", HexPreview = Convert.ToHexString(buf[7..23]).ToLowerInvariant(), Role = "128-bit CSPRNG KDF salt" },
+                    new() { Offset = 23, Length = 12, Name = "AES-GCM Nonce", HexPreview = Convert.ToHexString(buf[23..35]).ToLowerInvariant(), Role = "96-bit CSPRNG nonce" },
+                    new() { Offset = 35, Length = pCtLen, Name = "Encrypted Padded Payload", HexPreview = Convert.ToHexString(buf[35..Math.Min(51, buf.Length - 16)]).ToLowerInvariant() + "…", Role = "Encrypted message, file & random padding" },
+                    new() { Offset = buf.Length - 16, Length = 16, Name = "GCM Auth Tag", HexPreview = Convert.ToHexString(buf[^16..]).ToLowerInvariant(), Role = "128-bit integrity tag bound to header" },
+                }
+            };
+        }
+
         if (buf.Length < OuterHeaderLen + GcmTagLen)
             throw new InvalidDataException("Packet too small to be a valid Veil envelope.");
 

@@ -43,7 +43,87 @@ public partial class MainWindow : Window
         };
         _idleTimer.Start();
 
-        Loaded += (_, _) => EnsureUnlocked();
+        Loaded += (_, _) =>
+        {
+            if (EnsureUnlocked())
+                ProcessStartupArgs();
+        };
+    }
+
+    private void ProcessStartupArgs()
+    {
+        var args = App.StartupArgs;
+        if (args == null || args.Length == 0) return;
+
+        if (args.Length >= 2 && args[0].Equals("--encrypt", StringComparison.OrdinalIgnoreCase) && File.Exists(args[1]))
+        {
+            AttachFilePath(args[1]);
+            MainTabs.SelectedIndex = 1;
+            ComposeBox.Focus();
+            return;
+        }
+
+        string target = args[0];
+        if (!File.Exists(target)) return;
+
+        if (target.EndsWith(".veil", StringComparison.OrdinalIgnoreCase))
+            DecryptVeilFile(target);
+        else if (target.EndsWith(".veilpub", StringComparison.OrdinalIgnoreCase) || target.EndsWith(".veilcard", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var entry = _manager.ImportPublicKey(File.ReadAllBytes(target));
+                RefreshUI();
+                MessageBox.Show(this, $"Verified & added contact public key:\n{entry.DisplayName} ({entry.SafetyPhrase})",
+                    "Contact Added", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Import Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+        else if (target.EndsWith(".veilkey", StringComparison.OrdinalIgnoreCase))
+            ImportPrivateKeyFile(target);
+        else
+        {
+            AttachFilePath(target);
+            MainTabs.SelectedIndex = 1;
+            ComposeBox.Focus();
+        }
+    }
+
+    private void RegisterWindows_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            WindowsIntegration.Register();
+            StatusText.Text = "Registered .veil, .veilpub, .veilkey file associations & Explorer right-click menu";
+            MessageBox.Show(this,
+                "Windows integration enabled for your user account:\n\n" +
+                "• Double-click .veil files to open & decrypt in Veil\n" +
+                "• Double-click .veilpub / .veilkey files to import\n" +
+                "• Right-click any file in Explorer → \"Encrypt with Veil\"",
+                "Windows Integration Registered", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Registration Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void UnregisterWindows_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            WindowsIntegration.Unregister();
+            StatusText.Text = "Removed Windows file associations & Explorer right-click menu";
+            MessageBox.Show(this, "Removed Veil file associations and Explorer context menu.",
+                "Windows Integration Removed", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Unregister Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private bool EnsureUnlocked()
@@ -450,9 +530,72 @@ public partial class MainWindow : Window
         ClearAttachBtn.Visibility = Visibility.Collapsed;
     }
 
+    private void PassphraseMode_Changed(object sender, RoutedEventArgs e)
+    {
+        bool passMode = PassphraseModeCheck.IsChecked == true;
+        KeyEncryptPanel.Visibility = passMode ? Visibility.Collapsed : Visibility.Visible;
+        PassEncryptPanel.Visibility = passMode ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     private void ExportVeil_Click(object sender, RoutedEventArgs e)
     {
         if (_manager.Vault == null) return;
+        bool passMode = PassphraseModeCheck.IsChecked == true;
+
+        string text = ComposeBox.Text.Trim();
+        if (string.IsNullOrEmpty(text) && _pendingAttachment == null)
+        {
+            MessageBox.Show(this, "Enter a message or attach a file to encrypt.", "Export .veil", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (passMode)
+        {
+            string pass = SharePassBox.Password;
+            string confirm = SharePassConfirmBox.Password;
+            if (string.IsNullOrEmpty(pass) || pass.Length < 4)
+            {
+                MessageBox.Show(this, "Enter a passphrase of at least 4 characters.", "Export .veil", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            if (pass != confirm)
+            {
+                MessageBox.Show(this, "Passphrases do not match.", "Export .veil", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            string passDefaultName = _pendingAttachment != null ? $"{_pendingAttachment.Name}.veil" : "sealed-passphrase.veil";
+            var passSaveDlg = new SaveFileDialog
+            {
+                Title = "Export Passphrase-Encrypted Veil File (.veil)",
+                FileName = passDefaultName,
+                Filter = "Veil Sealed File (*.veil)|*.veil"
+            };
+            if (passSaveDlg.ShowDialog(this) != true) return;
+
+            try
+            {
+                var sealedRes = VeilProtocol.SealWithPassphrase(pass, text, _pendingAttachment);
+                File.WriteAllBytes(passSaveDlg.FileName, sealedRes.PacketBytes);
+                ComposeBox.Clear();
+                SharePassBox.Clear();
+                SharePassConfirmBox.Clear();
+                ClearAttach_Click(sender, e);
+                StatusText.Text = $"Exported passphrase-encrypted {Path.GetFileName(passSaveDlg.FileName)} ({sealedRes.PacketBytes.Length:N0} bytes)";
+
+                var show = MessageBox.Show(this,
+                    $"Exported passphrase-encrypted file:\n{passSaveDlg.FileName}\n\nSize: {sealedRes.PacketBytes.Length:N0} bytes (Argon2id 64 MiB + AES-256-GCM)\n\nShow file in Windows Explorer?",
+                    "Veil Export Complete", MessageBoxButton.YesNo, MessageBoxImage.Information);
+                if (show == MessageBoxResult.Yes)
+                    Process.Start("explorer.exe", $"/select,\"{passSaveDlg.FileName}\"");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Encryption Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            return;
+        }
+
         var signer = _manager.ActiveIdentity;
         if (signer == null)
         {
@@ -462,13 +605,6 @@ public partial class MainWindow : Window
         if (RecipientCombo.SelectedItem is not ContactEntry recipient)
         {
             MessageBox.Show(this, "Select a recipient public key first (or import a contact's public key).", "Export .veil", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        string text = ComposeBox.Text.Trim();
-        if (string.IsNullOrEmpty(text) && _pendingAttachment == null)
-        {
-            MessageBox.Show(this, "Enter a message or attach a file to encrypt.", "Export .veil", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -524,6 +660,38 @@ public partial class MainWindow : Window
         string name = Path.GetFileName(filePath);
         try
         {
+            if (VeilProtocol.IsPassphrasePacket(bytes))
+            {
+                var passDlg = new PromptDialog(
+                    "Decrypt Passphrase-Protected .veil File",
+                    $"Enter the shared passphrase for \"{name}\":",
+                    isPassword: true,
+                    okText: "Decrypt") { Owner = this };
+                if (passDlg.ShowDialog() != true) return;
+
+                var openedPass = VeilProtocol.OpenWithPassphrase(passDlg.Value, bytes);
+                _lastDecrypted = openedPass;
+                _lastDecryptedBytes = bytes;
+                _lastDecryptedFileName = name;
+
+                MainTabs.SelectedIndex = 1;
+                DecStatusHeader.Text = $"Decrypted (Passphrase Mode): {name}";
+                DecSenderLine.Text = "Encrypted with shared passphrase (no key pair)";
+                DecMetaLine.Text = $"Sent: {openedPass.SentAt}  |  Argon2id (64 MiB) + AES-256-GCM";
+                DecMessageBox.Text = string.IsNullOrEmpty(openedPass.Message) && openedPass.Attachment != null
+                    ? $"[Decrypted Attachment Ready: {openedPass.Attachment.Name} ({openedPass.Attachment.Size:N0} bytes)]"
+                    : openedPass.Message;
+
+                BtnSaveDecAttachment.Visibility = openedPass.Attachment != null ? Visibility.Visible : Visibility.Collapsed;
+                if (openedPass.Attachment != null)
+                    BtnSaveDecAttachment.Content = $"Save Decrypted File ({openedPass.Attachment.Name})…";
+
+                BtnAddSenderContact.Visibility = Visibility.Collapsed;
+                BtnInspectDecPacket.Visibility = Visibility.Visible;
+                StatusText.Text = $"Decrypted passphrase-protected file: {name}";
+                return;
+            }
+
             var (opened, activeKey) = _manager.DecryptWithActiveKey(bytes);
             _lastDecrypted = opened;
             _lastDecryptedBytes = bytes;

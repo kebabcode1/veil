@@ -67,6 +67,9 @@
             <MenuItem Header="_Tools">
                 <MenuItem Header="_Inspect .veil Packet…" Click="InspectFile_Click"/>
                 <Separator/>
+                <MenuItem Header="_Register Windows File Associations &amp; Context Menu" Click="RegisterWindows_Click"/>
+                <MenuItem Header="_Unregister Windows Integration" Click="UnregisterWindows_Click"/>
+                <Separator/>
                 <MenuItem Header="_Lock Vault" Click="LockVault_Click"/>
             </MenuItem>
             <MenuItem Header="_Help">
@@ -230,14 +233,28 @@
                     <GroupBox Grid.Column="0" Header="Sign, Encrypt &amp; Export .veil File" Padding="12" BorderBrush="#CCCCCC">
                         <DockPanel>
                             <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
-                                <DockPanel Margin="0,0,0,8">
-                                    <TextBlock Text="Signing As (Active Key):" Width="155" VerticalAlignment="Center"/>
-                                    <TextBox x:Name="ActiveSignerBox" IsReadOnly="True" Background="#F5F5F5" BorderBrush="#CCCCCC" Padding="6,4" FontFamily="Consolas" FontSize="11.5"/>
-                                </DockPanel>
-                                <DockPanel>
-                                    <TextBlock Text="Encrypt For (Public Key):" Width="155" VerticalAlignment="Center"/>
-                                    <ComboBox x:Name="RecipientCombo" DisplayMemberPath="DisplayName" Padding="6,4"/>
-                                </DockPanel>
+                                <CheckBox x:Name="PassphraseModeCheck" Content="Passphrase-Only Mode (No Recipient Key Needed)"
+                                          Margin="0,0,0,10" Checked="PassphraseMode_Changed" Unchecked="PassphraseMode_Changed"/>
+                                <StackPanel x:Name="KeyEncryptPanel">
+                                    <DockPanel Margin="0,0,0,8">
+                                        <TextBlock Text="Signing As (Active Key):" Width="155" VerticalAlignment="Center"/>
+                                        <TextBox x:Name="ActiveSignerBox" IsReadOnly="True" Background="#F5F5F5" BorderBrush="#CCCCCC" Padding="6,4" FontFamily="Consolas" FontSize="11.5"/>
+                                    </DockPanel>
+                                    <DockPanel>
+                                        <TextBlock Text="Encrypt For (Public Key):" Width="155" VerticalAlignment="Center"/>
+                                        <ComboBox x:Name="RecipientCombo" DisplayMemberPath="DisplayName" Padding="6,4"/>
+                                    </DockPanel>
+                                </StackPanel>
+                                <StackPanel x:Name="PassEncryptPanel" Visibility="Collapsed">
+                                    <DockPanel Margin="0,0,0,8">
+                                        <TextBlock Text="Shared Passphrase:" Width="155" VerticalAlignment="Center"/>
+                                        <PasswordBox x:Name="SharePassBox" Padding="6,4" BorderBrush="#ABADB3"/>
+                                    </DockPanel>
+                                    <DockPanel>
+                                        <TextBlock Text="Confirm Passphrase:" Width="155" VerticalAlignment="Center"/>
+                                        <PasswordBox x:Name="SharePassConfirmBox" Padding="6,4" BorderBrush="#ABADB3"/>
+                                    </DockPanel>
+                                </StackPanel>
                             </StackPanel>
 
                             <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
