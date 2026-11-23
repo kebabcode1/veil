@@ -517,14 +517,18 @@ public partial class MainWindow : Window
             ? ImageSanitizer.StripMetadata(path, out stripped)
             : File.ReadAllBytes(path);
 
+        string safeName = stripped
+            ? $"image-{System.Security.Cryptography.RandomNumberGenerator.GetHexString(8, lowercase: true)}{Path.GetExtension(path).ToLowerInvariant()}"
+            : Path.GetFileName(path);
+
         _pendingAttachment = new VeilAttachment
         {
-            Name = Path.GetFileName(path),
+            Name = safeName,
             Mime = "application/octet-stream",
             Size = bytes.Length,
             DataBase64 = Convert.ToBase64String(bytes),
         };
-        string tag = stripped ? " — EXIF/GPS stripped" : "";
+        string tag = stripped ? " — EXIF/GPS & filename anonymized" : "";
         AttachmentLabel.Text = $"{_pendingAttachment.Name} ({_pendingAttachment.Size:N0} bytes{tag})";
         ClearAttachBtn.Visibility = Visibility.Visible;
     }
