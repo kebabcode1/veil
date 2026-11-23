@@ -258,6 +258,8 @@
                             </StackPanel>
 
                             <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                                <CheckBox x:Name="StripMetadataCheck" Content="Strip image metadata (EXIF / GPS) when attaching images"
+                                          IsChecked="True" Margin="0,0,0,8"/>
                                 <DockPanel Margin="0,0,0,10">
                                     <Button Content="Attach File…" Padding="10,5" Click="AttachFile_Click"/>
                                     <TextBlock x:Name="AttachmentLabel" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="#444444" TextTrimming="CharacterEllipsis"/>

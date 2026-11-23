@@ -511,7 +511,12 @@ public partial class MainWindow : Window
 
     private void AttachFilePath(string path)
     {
-        byte[] bytes = File.ReadAllBytes(path);
+        bool strip = StripMetadataCheck?.IsChecked == true;
+        bool stripped = false;
+        byte[] bytes = strip && ImageSanitizer.IsSupportedImage(path)
+            ? ImageSanitizer.StripMetadata(path, out stripped)
+            : File.ReadAllBytes(path);
+
         _pendingAttachment = new VeilAttachment
         {
             Name = Path.GetFileName(path),
@@ -519,7 +524,8 @@ public partial class MainWindow : Window
             Size = bytes.Length,
             DataBase64 = Convert.ToBase64String(bytes),
         };
-        AttachmentLabel.Text = $"{_pendingAttachment.Name} ({_pendingAttachment.Size:N0} bytes)";
+        string tag = stripped ? " — EXIF/GPS stripped" : "";
+        AttachmentLabel.Text = $"{_pendingAttachment.Name} ({_pendingAttachment.Size:N0} bytes{tag})";
         ClearAttachBtn.Visibility = Visibility.Visible;
     }
 
